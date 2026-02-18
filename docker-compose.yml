@@ -1,0 +1,53 @@
+services:
+  habitnow-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: habitnow-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET:-habitnow_super_secret_jwt_key_change_in_production}
+      - JWT_EXPIRES_IN=7d
+      - DB_PATH=/app/data/habitnow.db
+      - FRONTEND_URL=http://localhost:4201
+      - NODE_ENV=production
+    volumes:
+      - habitnow-data:/app/data
+    networks:
+      - habitnow-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/auth/me"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  habitnow-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: habitnow-frontend
+    restart: unless-stopped
+    ports:
+      - "4201:80"
+    depends_on:
+      - habitnow-backend
+    networks:
+      - habitnow-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  habitnow-data:
+    driver: local
+
+networks:
+  habitnow-network:
+    driver: bridge
