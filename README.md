@@ -2,8 +2,6 @@
 
 A full-stack habit tracking application. Built with NestJS (backend) and Angular (frontend), fully containerized with Docker.
 
-**Live Demo:** https://habitos.xiltepin.me
-
 ---
 
 ## 📋 Table of Contents
@@ -261,10 +259,8 @@ nano .env
 ```env
 JWT_SECRET=your_super_secret_jwt_key_here
 BACKEND_PORT=3001
-FRONTEND_PORT=4201
-FRONTEND_URL=https://habitos.xiltepin.me
-BACKEND_URL=https://habitos-api.xiltepin.me
-NODE_ENV=production
+FRONTEND_URL=https://{instancename}.domain
+BACKEND_URL=https://{instancename}-api.domain
 ```
 
 ---
@@ -289,7 +285,7 @@ PORT=3001
 JWT_SECRET=long_random_production_secret
 JWT_EXPIRES_IN=7d
 DB_PATH=/app/data/habitnow.db
-FRONTEND_URL=https://habitos.xiltepin.me
+FRONTEND_URL=https://habitos.example.com
 NODE_ENV=production
 ```
 
@@ -302,7 +298,7 @@ Location: `frontend/src/environments/environment.prod.ts`
 ```typescript
 export const environment = {
   production: true,
-  apiUrl: 'https://habitos-api.xiltepin.me/api',
+  apiUrl: 'https://habitos-api.example.com/api',
 };
 ```
 
@@ -313,7 +309,7 @@ export const environment = {
 ### Base URL
 
 - **Development:** `http://localhost:3001/api`
-- **Production:** `https://habitos-api.xiltepin.me/api`
+- **Production:** `https://habitos-api.example.com/api`
 
 ### Authentication
 
@@ -427,8 +423,8 @@ docker compose ps
 
 | Host | Forward To | SSL |
 |------|-----------|-----|
-| `habitos.xiltepin.me` | `192.168.0.6:4201` | Let's Encrypt |
-| `habitos-api.xiltepin.me` | `192.168.0.6:3001` | Let's Encrypt |
+| `habitos.example.com` | `192.168.0.6:4201` | Let's Encrypt |
+| `habitos-api.example.com` | `192.168.0.6:3001` | Let's Encrypt |
 
 ---
 
@@ -479,7 +475,7 @@ npx cap init
 
 It will ask:
 - **App name:** `Habitos`
-- **App ID:** `me.xiltepin.habitos` (reverse domain, make up anything like `com.yourname.habitos`)
+- **App ID:** `com.example.habitos` (reverse domain, make up anything like `com.yourname.habitos`)
 - **Web assets directory:** `dist/frontend/browser`
 
 This creates a `capacitor.config.ts` file. Open it and make sure it looks like this:
@@ -488,7 +484,7 @@ This creates a `capacitor.config.ts` file. Open it and make sure it looks like t
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'me.xiltepin.habitos',
+  appId: 'com.example.habitos',
   appName: 'Habitos',
   webDir: 'dist/frontend/browser',
   server: {
@@ -573,7 +569,7 @@ In Android Studio:
 
 ### Making it use the live backend
 
-Your Angular code already points to `https://habitos-api.xiltepin.me/api` in `environment.ts`. The APK will use that same URL — so as long as your backend is running and reachable from the internet, the app just works.
+Your Angular code already points to `https://habitos-api.example.com/api` in `environment.ts`. The APK will use that same URL — so as long as your backend is running and reachable from the internet, the app just works.
 
 If you want it to work on the same local network without internet, change the API URL in `environment.ts` to your local IP before building:
 
@@ -647,7 +643,7 @@ Nginx handles this via `try_files $uri $uri/ /index.html`.
 
 ```bash
 docker compose logs habitnow-backend | grep CORS
-# Should show: [CORS] Allowed origin: https://habitos.xiltepin.me
+# Should show: [CORS] Allowed origin: https://habitos.example.com
 ```
 
 ### Database lost after restart
