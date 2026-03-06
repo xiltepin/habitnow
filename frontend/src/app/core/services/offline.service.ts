@@ -28,28 +28,20 @@ export class OfflineService {
 
     getTodayHabits(date: string): any[] {
         const habits = this.getHabits().filter(h => h.isActive);
-        const dayOfWeek = new Date(date).getDay(); // 0-6
-        const dayStr = String(dayOfWeek === 0 ? 7 : dayOfWeek); // map Sunday (0) to 7
-
-        // Add completions locally for today
         const completions = this.getCompletions(date);
 
         return habits.map(h => {
-            // Mock daily/weekly check, simplified
-            let match = true;
-            if (['1', '2', '3', '4', '5', '6', '7'].includes(h.frequency)) {
-                match = h.frequencyDays?.includes(dayStr) ?? true;
-            }
-            if (!match) return null;
-
             const comp = completions.filter(c => c.habitId === h.id);
+            const weeklyStats = this.getWeeklyStats(h, date);
             return {
                 ...h,
-                completedToday: comp.length >= h.targetCount,
+                completedToday: comp.length >= (h.targetCount || 1),
                 completedCount: comp.length,
-                streak: this.calculateStreak(h.id, date)
+                streak: this.calculateStreak(h.id, date),
+                goalAccomplishedThisWeek: weeklyStats.goalAccomplishedThisWeek,
+                totalGoalsAccomplished: weeklyStats.totalGoalsAccomplished
             };
-        }).filter(h => !!h);
+        });
     }
 
     createHabit(data: any): any {
@@ -75,7 +67,13 @@ export class OfflineService {
     }
 
     deleteHabit(id: number) {
-        const habits = this.getHabits().filter(h => h.id !== id);
+        let habits = this.getHabits();
+        habits = habits.map(h => {
+            if (h.id === id) {
+                return { ...h, isActive: false };
+            }
+            return h;
+        });
         localStorage.setItem(this.HABITS_KEY, JSON.stringify(habits));
     }
 
@@ -91,18 +89,19 @@ export class OfflineService {
     toggleCompletion(habitId: number, date: string): any {
         const all = this.getCompletionsAll();
         const habit = this.getHabit(habitId);
+        const targetCount = habit?.targetCount || 1;
         const existing = all.filter(c => c.habitId === habitId && c.date.startsWith(date));
 
         let updatedCompletions;
         let isCompleted = false;
 
-        if (existing.length >= habit.targetCount) {
+        if (existing.length >= targetCount) {
             // Un-complete (remove all for today)
             updatedCompletions = all.filter(c => !(c.habitId === habitId && c.date.startsWith(date)));
         } else {
             // Add one
             updatedCompletions = [...all, { id: Date.now(), habitId, date }];
-            if (existing.length + 1 >= habit.targetCount) {
+            if (existing.length + 1 >= targetCount) {
                 isCompleted = true;
             }
         }
@@ -113,7 +112,6 @@ export class OfflineService {
 
     getHistory(habitId: number, days: number): any[] {
         const all = this.getCompletionsAll().filter(c => c.habitId === habitId);
-        // simplify by just returning all mapped by date counts
         const map = new Map<string, number>();
         for (const c of all) {
             const d = c.date.split('T')[0];
@@ -135,9 +133,74 @@ export class OfflineService {
         return stats;
     }
 
-    calculateStreak(habitId: number, date: string): number {
+    calculateStreak(habitId: number, upToDateStr: string): number {
         const all = this.getCompletionsAll().filter(c => c.habitId === habitId);
-        return Math.min(Math.floor(all.length / 2) + 1, 10); // Dummy streak logic for local demo
+        const completionDates = new Set(all.map(c => c.date.split('T')[0]));
+
+        let streak = 0;
+        const [upYear, upMonth, upDay] = upToDateStr.split('-').map(Number);
+        const upTo = new Date(upYear, upMonth - 1, upDay);
+        for (let i = 0; i < 365; i++) {
+            const d = new Date(upTo);
+            d.setDate(d.getDate() - i);
+            const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (completionDates.has(ds)) {
+                streak++;
+            } else if (i > 0) {
+                break;
+            }
+        }
+        return streak;
+    }
+
+    getWeeklyStats(habit: any, dateStr: string): { goalAccomplishedThisWeek: boolean, totalGoalsAccomplished: number } {
+        const completions = this.getCompletionsAll().filter(c => c.habitId === habit.id);
+
+        let targetFreq = 7;
+        if (['1', '2', '3', '4', '5', '6', '7'].includes(habit.frequency)) {
+            targetFreq = parseInt(habit.frequency, 10);
+        } else if (habit.frequency === 'weekly') {
+            targetFreq = 1;
+        }
+
+        const uniqueDates = new Set<string>();
+        completions.forEach(c => {
+            uniqueDates.add(c.date.split('T')[0]);
+        });
+
+        const weeksMap = new Map<string, Set<string>>();
+        uniqueDates.forEach(ds => {
+            const [y, m, dayOfMonth] = ds.split('-').map(Number);
+            const d = new Date(y, m - 1, dayOfMonth);
+            const day = d.getDay();
+            const diff = d.getDate() - day;
+            const sunday = new Date(d);
+            sunday.setDate(diff);
+            const sundayStr = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`;
+            if (!weeksMap.has(sundayStr)) {
+                weeksMap.set(sundayStr, new Set<string>());
+            }
+            weeksMap.get(sundayStr)!.add(ds);
+        });
+
+        let totalGoalsAccomplished = 0;
+        weeksMap.forEach((daysSet, sundayStr) => {
+            if (daysSet.size >= targetFreq) {
+                totalGoalsAccomplished++;
+            }
+        });
+
+        const [cy, cm, cd] = dateStr.split('-').map(Number);
+        const currentDate = new Date(cy, cm - 1, cd);
+        const currDay = currentDate.getDay();
+        const currSunday = new Date(currentDate);
+        currSunday.setDate(currentDate.getDate() - currDay);
+        const currSundayStr = `${currSunday.getFullYear()}-${String(currSunday.getMonth() + 1).padStart(2, '0')}-${String(currSunday.getDate()).padStart(2, '0')}`;
+
+        const thisWeekDays = weeksMap.get(currSundayStr);
+        const goalAccomplishedThisWeek = thisWeekDays ? thisWeekDays.size >= targetFreq : false;
+
+        return { goalAccomplishedThisWeek, totalGoalsAccomplished };
     }
 
     // --- Weights ---
